@@ -219,3 +219,9 @@ For a real launch, consider adding:
 ## License
 
 MIT License. The synthetic dataset is included only for demonstration and testing.
+
+## Acknowledgement
+
+Author: Mukhammadjon Khojikulov
+
+Mentor: Dr. Qingyang Xiao
