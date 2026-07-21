@@ -1,4 +1,4 @@
-# AI Education Center Finder — Uzbekistan
+# AI Education Center Finder for Uzbekistan
 
 A GitHub- and Streamlit-ready portfolio project for students, parents, and teachers to discover, filter, map, compare, and rank education centers **inside Uzbekistan only**.
 
