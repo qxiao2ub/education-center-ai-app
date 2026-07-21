@@ -1,168 +1,221 @@
-# AI-Based Education Center Cross-Function Website App
+# AI Education Center Finder — Uzbekistan
 
-A portfolio-ready Streamlit web app that helps students, parents, and teachers find education centers based on location, availability, eligibility, commute time, learning needs, events, resources, affiliations, and utilities.
+A GitHub- and Streamlit-ready portfolio project for students, parents, and teachers to discover, filter, map, compare, and rank education centers **inside Uzbekistan only**.
 
-> Note: the starter dataset in this repository is synthetic demo data. Replace it with verified public/open data for the country or region you want to support.
+## Important data notice
 
-## Project goals
+The bundled center records are **synthetic demonstration data**. The project intentionally labels every sample record as `[Demo]`. Before a public launch, replace the CSV with verified and permissioned information from education centers or suitable public/open-data sources.
 
-This project demonstrates how to build an AI-assisted education-center finder that can:
+## What makes this Uzbekistan-only
 
-- filter education centers by country, region, city, center type, subject, resource, date, and time
-- check whether a center is open for a chosen day and time
-- estimate commute time from a selected location
-- check grade, age, and membership/referral eligibility
-- display centers on an interactive regional map
-- show events, resources, languages, accessibility notes, utilities, and affiliations
-- rank centers using a transparent AI recommendation score
-- package the project as a Streamlit website app
+- The application loads records only when `country == Uzbekistan`.
+- There is no country selector.
+- The region list covers the Republic of Karakalpakstan, 12 regions, and Tashkent City.
+- The map is centered and bounded to Uzbekistan.
+- Location presets contain Uzbekistan cities only.
+- The student grade selector follows grades 1–11.
+- Local date/time defaults use `Asia/Tashkent`.
+- Fees are represented in Uzbekistani soʻm (UZS).
+- English, Uzbek, and Russian interface headings are included.
 
-## Features
+## Main features
 
-| Feature | Description |
-| --- | --- |
-| Personalized profile | Students, parents, and teachers can enter grade, age, membership/referral status, and learning goals. |
-| Smart filters | Filters for center type, region, city, subject interests, resources, keyword, eligibility, and open hours. |
-| Availability engine | Reads JSON-style weekly schedules and determines whether a center is open at the selected date/time. |
-| Eligibility logic | Checks grade range, age range, and membership/referral requirements. |
-| Commute estimator | Uses latitude/longitude and a haversine distance formula to estimate commute time by walk, bike, transit, or drive. |
-| Interactive map | Uses Folium and Streamlit-Folium to show education centers on a regional map. |
-| AI recommendation | Uses TF-IDF text matching plus availability, eligibility, commute, and cost signals to rank centers. |
-| GitHub-ready | Includes `app.py`, `requirements.txt`, `education_centers_seed.csv`, and this `README.md`. |
+- User profiles for students, parents, and teachers
+- Region, city, center type, subject, resource, language, and keyword filters
+- Date/time opening-hours checks
+- Grade, age, and membership eligibility checks
+- Estimated commute time by walking, bicycle, public transport, or car/taxi
+- Interactive Folium map of Uzbekistan
+- Explainable AI recommendation score
+- Multilingual text matching for English, Uzbek, and Russian queries
+- Center comparison table and CSV download
+- Regional coverage analytics
+- No OpenAI key or paid API required
 
-## Tech stack
+## Explainable AI method
 
-- Python
-- Google Colab / Jupyter Notebook
-- Streamlit
-- Pandas
-- NumPy
-- scikit-learn
-- Folium
-- Streamlit-Folium
+The app uses a local content-based recommendation method:
+
+```text
+score = 0.43 × content similarity
+      + 0.19 × eligibility
+      + 0.15 × open status
+      + 0.13 × distance
+      + 0.10 × affordability
+```
+
+Content similarity is calculated with TF-IDF character n-grams. Character n-grams allow basic matching across multilingual input without sending user text to an external AI service.
 
 ## Repository structure
 
 ```text
-.
+uzbekistan_education_center_app/
+├── .streamlit/
+│   └── config.toml
 ├── app.py
-├── education_centers_seed.csv
+├── uzbekistan_education_centers.csv
+├── Uzbekistan_Education_Center_App_Colab.ipynb
 ├── requirements.txt
-└── README.md
+├── smoke_test.py
+├── README.md
+├── LICENSE
+└── .gitignore
 ```
 
 ## Run locally
 
+### 1. Create a virtual environment
+
+Windows PowerShell:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+macOS/Linux:
+
 ```bash
-python -m pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+### 2. Install packages
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Start Streamlit
+
+```bash
 streamlit run app.py
 ```
 
-## Run in Google Colab
+## Upload to GitHub
 
-1. Open the notebook `AI_Education_Center_App_Colab.ipynb` in Google Colab.
-2. Run the setup cells to create the dataset, `app.py`, `requirements.txt`, and `README.md`.
-3. Run the Streamlit launch cell.
-4. Open the public localtunnel link generated in the notebook output.
+1. Extract the ZIP file.
+2. Create a new empty GitHub repository.
+3. Open a terminal inside the extracted project folder.
+4. Run:
+
+```bash
+git init
+git add .
+git commit -m "Create Uzbekistan education center finder"
+git branch -M main
+git remote add origin https://github.com/YOUR-USERNAME/YOUR-REPOSITORY.git
+git push -u origin main
+```
+
+You can also upload the extracted files through the GitHub website. Make sure `app.py`, `requirements.txt`, and the CSV remain in the repository root.
 
 ## Deploy on Streamlit Community Cloud
 
-1. Create a public GitHub repository.
-2. Upload these files:
-   - `app.py`
-   - `education_centers_seed.csv`
-   - `requirements.txt`
-   - `README.md`
-3. Go to Streamlit Community Cloud.
-4. Connect your GitHub account and choose the repository.
-5. Set the main file path to `app.py`.
-6. Deploy the app.
-
-## Customize for your country or region
-
-Replace the synthetic CSV with verified open/public data. Keep these columns when possible:
-
-- `center_id`
-- `name`
-- `country`
-- `region`
-- `city`
-- `center_type`
-- `address`
-- `latitude`
-- `longitude`
-- `min_grade`
-- `max_grade`
-- `min_age`
-- `max_age`
-- `cost_level`
-- `membership_required`
-- `subjects`
-- `resources`
-- `utilities`
-- `affiliations`
-- `languages`
-- `accessibility`
-- `website`
-- `contact`
-- `open_schedule_json`
-- `eligibility_notes`
-- `events_json`
-- `description`
-
-For pipe-delimited fields such as `subjects`, use this format:
+1. Push the extracted project to a public GitHub repository.
+2. Sign in to Streamlit Community Cloud.
+3. Select **Create app**.
+4. Choose the GitHub repository and `main` branch.
+5. Set **Main file path** to:
 
 ```text
-Math|Reading|Writing|Homework Help
+app.py
 ```
 
-For `open_schedule_json`, use a JSON list like this:
+6. Deploy the app.
+
+No secrets are required for the included version.
+
+## Validate the repository
+
+After installing the dependencies, run:
+
+```bash
+python smoke_test.py
+```
+
+The smoke test checks the Uzbekistan-only dataset, recommendation logic, commute calculations, and map generation.
+
+## Use in Google Colab
+
+Open `Uzbekistan_Education_Center_App_Colab.ipynb` in Colab. The notebook:
+
+- installs dependencies
+- validates the Uzbekistan-only CSV
+- explains the recommendation architecture
+- can package the repository as a ZIP
+- provides optional commands for a temporary Streamlit preview
+
+For permanent deployment, GitHub plus Streamlit Community Cloud is recommended instead of a Colab tunnel.
+
+## Replace the demonstration data
+
+Keep the same CSV filename:
+
+```text
+uzbekistan_education_centers.csv
+```
+
+Important columns include:
+
+| Column | Purpose |
+| --- | --- |
+| `name` | Center name |
+| `country` | Must be `Uzbekistan` |
+| `region`, `city`, `district` | Uzbekistan location fields |
+| `latitude`, `longitude` | Map coordinates |
+| `min_grade`, `max_grade` | Grade eligibility |
+| `min_age`, `max_age` | Age eligibility |
+| `subjects`, `resources`, `utilities`, `languages` | Pipe-separated values |
+| `open_schedule_json` | Weekly opening schedule as JSON |
+| `events_json` | Programs/events as JSON |
+| `monthly_fee_uzs` | Approximate monthly fee in UZS |
+| `verification_status` | Verification and review status |
+
+Example pipe-separated field:
+
+```text
+Mathematics|Physics|Python
+```
+
+Example schedule:
 
 ```json
 [
-  {"day": "Monday", "start": "09:00", "end": "17:00"},
-  {"day": "Tuesday", "start": "09:00", "end": "17:00"}
+  {"day": "Monday", "start": "14:00", "end": "20:00"},
+  {"day": "Saturday", "start": "09:00", "end": "17:00"}
 ]
 ```
 
-For `events_json`, use a JSON list like this:
+## Production improvements
 
-```json
-[
-  {"date": "2026-07-08", "title": "SAT Strategy Night", "audience": "High school students"}
-]
-```
+For a real launch, consider adding:
 
-## AI scoring method
+- a verified center onboarding and approval workflow
+- center-owner accounts for updating schedules and events
+- PostgreSQL or Supabase storage
+- real road and transit routing
+- geocoding and address validation
+- user favorites and notifications
+- moderation, audit logs, and data-quality checks
+- accessibility verification
+- Uzbek Latin, Uzbek Cyrillic, Karakalpak, Russian, and English localization
+- privacy controls and parental consent for student accounts
 
-The app uses a transparent content-based recommendation score:
+## Responsible AI and privacy
 
-```python
-score = 0.42 * content_match + 0.18 * eligibility + 0.16 * open_status + 0.14 * distance + 0.10 * cost
-```
+- Do not collect unnecessary student personal information.
+- Do not store sensitive student records in the public GitHub repository.
+- Treat ranking as decision support, not a guarantee of education quality.
+- Explain recommendation factors to users.
+- Give centers a way to correct inaccurate information.
+- Verify opening hours, prices, eligibility, and accessibility before public use.
+- Do not publish phone numbers, names, or addresses without a lawful basis and permission.
 
-The content score is computed with TF-IDF similarity between the user's selected interests/goals and each center's subjects, resources, events, description, languages, and utilities.
+## Portfolio description
 
-## Portfolio and college application angle
-
-This project is suitable for a student portfolio because it demonstrates:
-
-- data modeling
-- full-stack Python web app development
-- applied AI recommendation logic
-- geospatial visualization
-- UI/UX design for students, parents, and teachers
-- ethical handling of education data
-- deployment and GitHub documentation
-
-Suggested resume bullet:
-
-> Built an AI-assisted Streamlit web app that helps students, parents, and teachers search, filter, map, and rank education centers using availability logic, eligibility checks, commute estimation, and a transparent recommendation score.
-
-## Responsible data note
-
-Do not store private student records, exact home addresses, medical information, protected education records, or other sensitive personal data in this app. For a production system, add secure authentication, consent, encryption, audit logs, and compliance review before handling real users or student data.
+> Built an Uzbekistan-focused AI-assisted education-center discovery platform with Python and Streamlit. Implemented multilingual content matching, eligibility and schedule checks, commute estimation, interactive mapping, transparent recommendation scoring, analytics, and GitHub/Streamlit deployment packaging.
 
 ## License
 
-MIT License is recommended for an open-source portfolio project. Add a `LICENSE` file if you publish this repository.
+MIT License. The synthetic dataset is included only for demonstration and testing.

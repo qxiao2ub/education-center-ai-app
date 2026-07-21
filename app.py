@@ -1,7 +1,3 @@
-# app.py
-# AI-Based Education Center Cross-Function Website App
-# Run locally: streamlit run app.py
-
 from __future__ import annotations
 
 import datetime as dt
@@ -9,6 +5,7 @@ import json
 import math
 from pathlib import Path
 from typing import Any, Iterable
+from zoneinfo import ZoneInfo
 
 import folium
 import numpy as np
@@ -18,45 +15,105 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from streamlit_folium import st_folium
 
-DATA_PATH = Path("education_centers_seed.csv")
+APP_DIR = Path(__file__).resolve().parent
+DATA_PATH = APP_DIR / "uzbekistan_education_centers.csv"
+UZBEKISTAN_TIMEZONE = ZoneInfo("Asia/Tashkent")
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-CENTER_TYPES = [
-    "Tutoring Center",
-    "STEM / Makerspace",
-    "Community Center",
-    "Language / ESL Center",
-    "Museum Education Center",
-    "College Prep Center",
-    "Library Learning Studio",
-    "Robotics Club",
-    "Math Enrichment Center",
-    "Technology Academy",
-    "Career / Coding Center",
-    "Homework Help Center",
-    "Research Skills Center",
-    "Writing Center",
-    "Environmental Education Center",
-    "Science Discovery Center",
-    "Family Literacy Center",
-    "Teacher Resource Center",
+
+UZBEKISTAN_REGIONS = [
+    "Republic of Karakalpakstan",
+    "Andijan Region",
+    "Bukhara Region",
+    "Fergana Region",
+    "Jizzakh Region",
+    "Namangan Region",
+    "Navoiy Region",
+    "Qashqadaryo Region",
+    "Samarqand Region",
+    "Sirdaryo Region",
+    "Surxondaryo Region",
+    "Tashkent Region",
+    "Khorezm Region",
+    "Tashkent City",
 ]
 
+LOCATION_PRESETS = {
+    "Tashkent": (41.3111, 69.2797),
+    "Samarkand": (39.6542, 66.9597),
+    "Bukhara": (39.7681, 64.4556),
+    "Andijan": (40.7821, 72.3442),
+    "Fergana": (40.3894, 71.7870),
+    "Namangan": (40.9983, 71.6726),
+    "Nukus": (42.4602, 59.6166),
+    "Qarshi": (38.8610, 65.7847),
+    "Termez": (37.2242, 67.2783),
+    "Urgench": (41.5500, 60.6333),
+    "Navoiy": (40.1039, 65.3688),
+    "Jizzakh": (40.1250, 67.8808),
+    "Gulistan": (40.4897, 68.7842),
+    "Chirchiq": (41.4689, 69.5822),
+}
+
 SPEED_KMPH = {
-    "Walk": 5,
-    "Bike": 15,
-    "Transit": 24,
-    "Drive": 40,
+    "Walking": 5,
+    "Bicycle": 15,
+    "Public transport": 24,
+    "Car / taxi": 42,
 }
 MODE_BUFFER_MINUTES = {
-    "Walk": 2,
-    "Bike": 4,
-    "Transit": 12,
-    "Drive": 6,
+    "Walking": 2,
+    "Bicycle": 4,
+    "Public transport": 14,
+    "Car / taxi": 8,
+}
+
+TRANSLATIONS = {
+    "English": {
+        "title": "AI Education Center Finder — Uzbekistan",
+        "subtitle": "Find, compare, and map education centers across Uzbekistan.",
+        "demo": "Demonstration dataset: center records are synthetic and must be replaced or verified before public use.",
+        "profile": "1. User profile",
+        "availability": "2. Date and availability",
+        "location": "3. Location and commute",
+        "filters": "4. Uzbekistan filters",
+        "recommendations": "Recommendations",
+        "map": "Uzbekistan map",
+        "compare": "Compare centers",
+        "analytics": "Regional analytics",
+        "data": "Data and project notes",
+    },
+    "O‘zbekcha": {
+        "title": "AI Ta’lim Markazlari Qidiruvi — O‘zbekiston",
+        "subtitle": "O‘zbekiston bo‘ylab ta’lim markazlarini toping, solishtiring va xaritada ko‘ring.",
+        "demo": "Namoyish ma’lumotlari: markazlar sintetik. Ommaviy foydalanishdan oldin tekshiring yoki haqiqiy ma’lumot bilan almashtiring.",
+        "profile": "1. Foydalanuvchi profili",
+        "availability": "2. Sana va mavjudlik",
+        "location": "3. Joylashuv va yo‘l vaqti",
+        "filters": "4. O‘zbekiston filtrlari",
+        "recommendations": "Tavsiyalar",
+        "map": "O‘zbekiston xaritasi",
+        "compare": "Markazlarni solishtirish",
+        "analytics": "Hududiy tahlil",
+        "data": "Ma’lumotlar va loyiha izohlari",
+    },
+    "Русский": {
+        "title": "AI-поиск образовательных центров — Узбекистан",
+        "subtitle": "Ищите, сравнивайте и просматривайте образовательные центры Узбекистана на карте.",
+        "demo": "Демонстрационные данные: записи центров синтетические. Перед публикацией замените или проверьте их.",
+        "profile": "1. Профиль пользователя",
+        "availability": "2. Дата и доступность",
+        "location": "3. Местоположение и дорога",
+        "filters": "4. Фильтры по Узбекистану",
+        "recommendations": "Рекомендации",
+        "map": "Карта Узбекистана",
+        "compare": "Сравнение центров",
+        "analytics": "Региональная аналитика",
+        "data": "Данные и описание проекта",
+    },
 }
 
 
 def safe_json_loads(value: Any, default: Any) -> Any:
-    """Safely parse a JSON string and return default when parsing fails."""
     if value is None:
         return default
     if isinstance(value, (list, dict)):
@@ -65,35 +122,77 @@ def safe_json_loads(value: Any, default: Any) -> Any:
         return default
     try:
         return json.loads(str(value))
-    except Exception:
+    except (TypeError, ValueError, json.JSONDecodeError):
         return default
 
 
 @st.cache_data(show_spinner=False)
 def load_centers(path: str | Path = DATA_PATH) -> pd.DataFrame:
-    """Load center data from CSV and normalize common fields."""
     path = Path(path)
     if not path.exists():
-        st.error(
-            "Missing education_centers_seed.csv. Run the setup notebook cell first or upload your own dataset."
-        )
+        st.error("Missing uzbekistan_education_centers.csv in the repository root.")
         return pd.DataFrame()
+
     df = pd.read_csv(path)
-    for col in ["subjects", "resources", "utilities", "affiliations", "languages", "description"]:
-        if col in df.columns:
-            df[col] = df[col].fillna("").astype(str)
+    required = {
+        "center_id",
+        "name",
+        "country",
+        "region",
+        "city",
+        "center_type",
+        "latitude",
+        "longitude",
+        "min_grade",
+        "max_grade",
+        "min_age",
+        "max_age",
+        "cost_level",
+        "subjects",
+        "resources",
+        "utilities",
+        "languages",
+        "open_schedule_json",
+        "events_json",
+        "description",
+    }
+    missing = sorted(required.difference(df.columns))
+    if missing:
+        st.error("Dataset is missing required columns: " + ", ".join(missing))
+        return pd.DataFrame()
+
+    df = df[df["country"].astype(str).str.strip().eq("Uzbekistan")].copy()
+    for col in [
+        "subjects",
+        "resources",
+        "utilities",
+        "affiliations",
+        "languages",
+        "description",
+        "eligibility_notes",
+        "search_keywords",
+        "district",
+        "phone",
+        "telegram",
+        "website",
+        "verification_status",
+    ]:
+        if col not in df.columns:
+            df[col] = ""
+        df[col] = df[col].fillna("").astype(str)
+
     bool_map = {"yes": True, "no": False, "true": True, "false": False, "1": True, "0": False}
+    membership_values = df.get("membership_required", pd.Series("No", index=df.index))
     df["membership_required_bool"] = (
-        df.get("membership_required", "No").fillna("No").astype(str).str.lower().map(bool_map).fillna(False)
+        membership_values.fillna("No").astype(str).str.lower().map(bool_map).fillna(False)
     )
     return df
 
 
 def split_pipe(value: Any) -> list[str]:
-    """Split pipe-delimited strings into clean unique terms."""
     if value is None:
         return []
-    return [v.strip() for v in str(value).split("|") if v.strip()]
+    return [item.strip() for item in str(value).split("|") if item.strip()]
 
 
 def unique_terms(df: pd.DataFrame, column: str) -> list[str]:
@@ -110,7 +209,7 @@ def parse_time(value: str | dt.time) -> dt.time | None:
         return value
     try:
         return dt.datetime.strptime(str(value), "%H:%M").time()
-    except Exception:
+    except (TypeError, ValueError):
         return None
 
 
@@ -119,10 +218,8 @@ def time_in_slot(selected_time: dt.time, start_text: str, end_text: str) -> bool
     end = parse_time(end_text)
     if start is None or end is None:
         return False
-    # Normal same-day opening hours.
     if start <= end:
         return start <= selected_time <= end
-    # Overnight slot such as 22:00-02:00.
     return selected_time >= start or selected_time <= end
 
 
@@ -133,25 +230,27 @@ def slots_for_day(row: pd.Series, selected_date: dt.date) -> list[dict[str, str]
 
 
 def is_open_at(row: pd.Series, selected_date: dt.date, selected_time: dt.time) -> bool:
-    return any(time_in_slot(selected_time, slot.get("start", ""), slot.get("end", "")) for slot in slots_for_day(row, selected_date))
+    return any(
+        time_in_slot(selected_time, slot.get("start", ""), slot.get("end", ""))
+        for slot in slots_for_day(row, selected_date)
+    )
 
 
 def hours_for_day(row: pd.Series, selected_date: dt.date) -> str:
     slots = slots_for_day(row, selected_date)
     if not slots:
         return "Closed"
-    return ", ".join([f"{slot.get('start')} - {slot.get('end')}" for slot in slots])
+    return ", ".join(f"{slot.get('start')}–{slot.get('end')}" for slot in slots)
 
 
 def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Great-circle distance between two coordinates in kilometers."""
-    r = 6371.0
+    radius_km = 6371.0
     phi1 = math.radians(float(lat1))
     phi2 = math.radians(float(lat2))
-    d_phi = math.radians(float(lat2) - float(lat1))
-    d_lambda = math.radians(float(lon2) - float(lon1))
-    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
-    return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    delta_phi = math.radians(float(lat2) - float(lat1))
+    delta_lambda = math.radians(float(lon2) - float(lon1))
+    a = math.sin(delta_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2) ** 2
+    return 2 * radius_km * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def estimate_commute_minutes(distance_km: float | None, mode: str) -> float | None:
@@ -162,26 +261,33 @@ def estimate_commute_minutes(distance_km: float | None, mode: str) -> float | No
     return round((float(distance_km) / speed) * 60 + buffer, 1)
 
 
-def eligibility_status(row: pd.Series, grade: int, age: int, has_membership: bool) -> tuple[bool, list[str]]:
+def eligibility_status(
+    row: pd.Series,
+    grade: int,
+    age: int,
+    has_membership: bool,
+) -> tuple[bool, list[str]]:
     reasons: list[str] = []
-    min_grade, max_grade = int(row.get("min_grade", 0)), int(row.get("max_grade", 12))
-    min_age, max_age = int(row.get("min_age", 0)), int(row.get("max_age", 99))
+    min_grade, max_grade = int(row.get("min_grade", 1)), int(row.get("max_grade", 11))
+    min_age, max_age = int(row.get("min_age", 6)), int(row.get("max_age", 99))
     membership_required = bool(row.get("membership_required_bool", False))
 
-    if not (min_grade <= grade <= max_grade):
-        reasons.append(f"grade {grade} outside supported grade range {min_grade}-{max_grade}")
-    if not (min_age <= age <= max_age):
-        reasons.append(f"age {age} outside supported age range {min_age}-{max_age}")
+    if not min_grade <= grade <= max_grade:
+        reasons.append(f"grade {grade} is outside {min_grade}–{max_grade}")
+    if not min_age <= age <= max_age:
+        reasons.append(f"age {age} is outside {min_age}–{max_age}")
     if membership_required and not has_membership:
         reasons.append("membership or referral may be required")
-    return len(reasons) == 0, reasons
+    return not reasons, reasons
 
 
 def text_blob(row: pd.Series) -> str:
     pieces = [
         row.get("name", ""),
         row.get("center_type", ""),
+        row.get("region", ""),
         row.get("city", ""),
+        row.get("district", ""),
         row.get("subjects", ""),
         row.get("resources", ""),
         row.get("utilities", ""),
@@ -189,22 +295,22 @@ def text_blob(row: pd.Series) -> str:
         row.get("languages", ""),
         row.get("description", ""),
         row.get("eligibility_notes", ""),
+        row.get("search_keywords", ""),
     ]
-    events = safe_json_loads(row.get("events_json"), [])
-    for item in events:
-        pieces.append(str(item.get("title", "")))
-        pieces.append(str(item.get("audience", "")))
-    return " ".join(str(p) for p in pieces if p)
+    for event in safe_json_loads(row.get("events_json"), []):
+        pieces.extend([str(event.get("title", "")), str(event.get("audience", ""))])
+    return " ".join(str(piece) for piece in pieces if str(piece).strip())
 
 
 def cost_score(cost_level: str) -> float:
     mapping = {
-        "Free": 1.0,
-        "Low-cost": 0.85,
+        "Free": 1.00,
+        "Free / subsidized": 0.92,
+        "Low-cost": 0.82,
         "Moderate": 0.62,
-        "Paid": 0.42,
+        "Premium": 0.38,
     }
-    return mapping.get(str(cost_level), 0.6)
+    return mapping.get(str(cost_level), 0.58)
 
 
 def build_user_query(
@@ -213,13 +319,15 @@ def build_user_query(
     selected_resources: Iterable[str],
     center_types: Iterable[str],
     goal_text: str,
+    preferred_languages: Iterable[str],
 ) -> str:
     parts = [role, goal_text]
-    parts.extend(list(selected_subjects))
-    parts.extend(list(selected_resources))
-    parts.extend(list(center_types))
-    query = " ".join([p for p in parts if str(p).strip()])
-    return query or "learning homework tutoring STEM reading writing college readiness"
+    parts.extend(selected_subjects)
+    parts.extend(selected_resources)
+    parts.extend(center_types)
+    parts.extend(preferred_languages)
+    query = " ".join(str(part) for part in parts if str(part).strip())
+    return query or "ta'lim education o'quv learning tutoring matematika ingliz tili IT"
 
 
 def add_computed_columns(
@@ -233,21 +341,60 @@ def add_computed_columns(
     user_lon: float | None,
     commute_mode: str,
 ) -> pd.DataFrame:
-    df = df.copy()
-    df["open_selected_time"] = df.apply(lambda row: is_open_at(row, selected_date, selected_time), axis=1)
-    df["hours_today"] = df.apply(lambda row: hours_for_day(row, selected_date), axis=1)
+    result = df.copy()
+    result["open_selected_time"] = result.apply(
+        lambda row: is_open_at(row, selected_date, selected_time), axis=1
+    )
+    result["hours_selected_day"] = result.apply(
+        lambda row: hours_for_day(row, selected_date), axis=1
+    )
 
-    eligibilities = df.apply(lambda row: eligibility_status(row, grade, age, has_membership), axis=1)
-    df["eligible"] = [status for status, _ in eligibilities]
-    df["eligibility_reasons"] = ["; ".join(reasons) if reasons else "Eligible based on grade, age, and membership inputs" for _, reasons in eligibilities]
+    eligibilities = result.apply(
+        lambda row: eligibility_status(row, grade, age, has_membership), axis=1
+    )
+    result["eligible"] = [status for status, _ in eligibilities]
+    result["eligibility_reasons"] = [
+        "; ".join(reasons) if reasons else "Eligible based on grade, age, and membership inputs"
+        for _, reasons in eligibilities
+    ]
 
     if user_lat is not None and user_lon is not None:
-        df["distance_km"] = df.apply(lambda row: haversine_km(user_lat, user_lon, row["latitude"], row["longitude"]), axis=1)
-        df["commute_minutes"] = df["distance_km"].apply(lambda d: estimate_commute_minutes(d, commute_mode))
+        result["distance_km"] = result.apply(
+            lambda row: haversine_km(user_lat, user_lon, row["latitude"], row["longitude"]),
+            axis=1,
+        )
+        result["commute_minutes"] = result["distance_km"].apply(
+            lambda distance: estimate_commute_minutes(distance, commute_mode)
+        )
     else:
-        df["distance_km"] = np.nan
-        df["commute_minutes"] = np.nan
-    return df
+        result["distance_km"] = np.nan
+        result["commute_minutes"] = np.nan
+    return result
+
+
+def build_reason(
+    row: pd.Series,
+    selected_subjects: list[str],
+    selected_resources: list[str],
+    preferred_languages: list[str],
+) -> str:
+    row_terms = set(
+        split_pipe(row.get("subjects", ""))
+        + split_pipe(row.get("resources", ""))
+        + split_pipe(row.get("languages", ""))
+    )
+    selected = selected_subjects + selected_resources + preferred_languages
+    matches = [term for term in selected if term in row_terms]
+    reasons: list[str] = []
+    if matches:
+        reasons.append("matches " + ", ".join(matches[:5]))
+    if row.get("open_selected_time"):
+        reasons.append("open at the selected time")
+    if row.get("eligible"):
+        reasons.append("eligible for the selected profile")
+    if pd.notna(row.get("commute_minutes", np.nan)):
+        reasons.append(f"estimated {row.get('commute_minutes')} min away")
+    return "; ".join(reasons) or "broad profile match"
 
 
 def recommend_centers(
@@ -257,90 +404,90 @@ def recommend_centers(
     selected_resources: list[str],
     center_types: list[str],
     goal_text: str,
+    preferred_languages: list[str],
 ) -> pd.DataFrame:
     if df.empty:
         return df.copy()
 
-    df = df.copy()
-    query = build_user_query(role, selected_subjects, selected_resources, center_types, goal_text)
-    documents = df.apply(text_blob, axis=1).tolist() + [query]
-    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), min_df=1)
+    ranked = df.copy()
+    query = build_user_query(
+        role,
+        selected_subjects,
+        selected_resources,
+        center_types,
+        goal_text,
+        preferred_languages,
+    )
+    documents = ranked.apply(text_blob, axis=1).tolist() + [query]
+
+    # Character n-grams work well for English, Uzbek, and Russian text without an API key.
+    vectorizer = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 5), min_df=1, sublinear_tf=True)
     matrix = vectorizer.fit_transform(documents)
     similarities = cosine_similarity(matrix[:-1], matrix[-1]).ravel()
+    content_scores = similarities / np.max(similarities) if np.max(similarities) > 0 else np.zeros_like(similarities)
 
-    if np.max(similarities) > 0:
-        content_scores = similarities / np.max(similarities)
-    else:
-        content_scores = np.zeros_like(similarities)
+    eligible_scores = ranked["eligible"].astype(float).to_numpy()
+    open_scores = ranked["open_selected_time"].astype(float).to_numpy()
+    cost_scores = ranked["cost_level"].apply(cost_score).to_numpy()
 
-    eligible_scores = df["eligible"].astype(float).to_numpy() if "eligible" in df.columns else np.ones(len(df))
-    open_scores = df["open_selected_time"].astype(float).to_numpy() if "open_selected_time" in df.columns else np.ones(len(df))
-    cost_scores = df["cost_level"].apply(cost_score).to_numpy()
-
-    if "distance_km" in df.columns and df["distance_km"].notna().any():
-        distance_scores = 1 / (1 + df["distance_km"].fillna(df["distance_km"].median()) / 8)
+    if ranked["distance_km"].notna().any():
+        median_distance = ranked["distance_km"].median()
+        distance_scores = 1 / (1 + ranked["distance_km"].fillna(median_distance) / 10)
         distance_scores = distance_scores.to_numpy()
     else:
-        distance_scores = np.full(len(df), 0.65)
+        distance_scores = np.full(len(ranked), 0.65)
 
-    final = (
-        0.42 * content_scores
-        + 0.18 * eligible_scores
-        + 0.16 * open_scores
-        + 0.14 * distance_scores
+    final_score = (
+        0.43 * content_scores
+        + 0.19 * eligible_scores
+        + 0.15 * open_scores
+        + 0.13 * distance_scores
         + 0.10 * cost_scores
     )
-    df["ai_match_score"] = np.round(final * 100, 1)
-    df["content_match"] = np.round(content_scores * 100, 1)
-    df["ai_reason"] = df.apply(lambda row: build_reason(row, selected_subjects, selected_resources), axis=1)
-    return df.sort_values(["ai_match_score", "open_selected_time", "eligible"], ascending=[False, False, False])
-
-
-def build_reason(row: pd.Series, selected_subjects: list[str], selected_resources: list[str]) -> str:
-    row_terms = set(split_pipe(row.get("subjects", "")) + split_pipe(row.get("resources", "")))
-    selected = selected_subjects + selected_resources
-    matches = [term for term in selected if term in row_terms]
-    parts = []
-    if matches:
-        parts.append("matches " + ", ".join(matches[:4]))
-    if row.get("open_selected_time"):
-        parts.append("open at selected time")
-    if row.get("eligible"):
-        parts.append("eligible for your profile")
-    if pd.notna(row.get("commute_minutes", np.nan)):
-        parts.append(f"about {row.get('commute_minutes')} min by selected mode")
-    return "; ".join(parts) or "broad match based on center profile and user goals"
+    ranked["ai_match_score"] = np.round(final_score * 100, 1)
+    ranked["content_match"] = np.round(content_scores * 100, 1)
+    ranked["ai_reason"] = ranked.apply(
+        lambda row: build_reason(row, selected_subjects, selected_resources, preferred_languages),
+        axis=1,
+    )
+    return ranked.sort_values(
+        ["ai_match_score", "open_selected_time", "eligible"],
+        ascending=[False, False, False],
+    )
 
 
 def filter_centers(
     df: pd.DataFrame,
-    country: str,
     regions: list[str],
     cities: list[str],
     center_types: list[str],
+    preferred_languages: list[str],
     open_only: bool,
     eligible_only: bool,
     max_commute: int,
     keyword: str,
 ) -> pd.DataFrame:
     results = df.copy()
-    if country != "All":
-        results = results[results["country"] == country]
     if regions:
         results = results[results["region"].isin(regions)]
     if cities:
         results = results[results["city"].isin(cities)]
     if center_types:
         results = results[results["center_type"].isin(center_types)]
+    if preferred_languages:
+        language_mask = results["languages"].apply(
+            lambda value: any(language in split_pipe(value) for language in preferred_languages)
+        )
+        results = results[language_mask]
     if open_only:
         results = results[results["open_selected_time"]]
     if eligible_only:
         results = results[results["eligible"]]
-    if "commute_minutes" in results.columns and results["commute_minutes"].notna().any():
+    if results["commute_minutes"].notna().any():
         results = results[results["commute_minutes"] <= max_commute]
     if keyword.strip():
-        key = keyword.lower().strip()
-        mask = results.apply(lambda row: key in text_blob(row).lower(), axis=1)
+        normalized = keyword.casefold().strip()
+        mask = results.apply(lambda row: normalized in text_blob(row).casefold(), axis=1)
         results = results[mask]
     return results
 
@@ -348,38 +495,53 @@ def filter_centers(
 def build_map(df: pd.DataFrame, user_lat: float | None, user_lon: float | None) -> folium.Map:
     if user_lat is not None and user_lon is not None:
         start = [user_lat, user_lon]
+        zoom = 9
     elif not df.empty:
         start = [df["latitude"].mean(), df["longitude"].mean()]
+        zoom = 6
     else:
-        start = [39.0, -76.8]
+        start = [41.1, 64.5]
+        zoom = 6
 
-    fmap = folium.Map(location=start, zoom_start=9, control_scale=True)
+    fmap = folium.Map(
+        location=start,
+        zoom_start=zoom,
+        tiles="CartoDB positron",
+        control_scale=True,
+        min_zoom=5,
+        max_bounds=True,
+    )
+    fmap.fit_bounds([[37.0, 55.5], [46.0, 74.5]])
+
     if user_lat is not None and user_lon is not None:
         folium.Marker(
             location=[user_lat, user_lon],
-            popup="Your selected location",
+            popup="Selected user location",
             tooltip="Your location",
             icon=folium.Icon(color="blue", icon="home"),
         ).add_to(fmap)
 
     for _, row in df.iterrows():
-        status = "Open" if row.get("open_selected_time") else "Closed at selected time"
-        eligible = "Eligible" if row.get("eligible") else "Check eligibility"
-        color = "green" if row.get("open_selected_time") and row.get("eligible") else "orange"
+        open_text = "Open" if row.get("open_selected_time") else "Closed at selected time"
+        eligibility_text = "Eligible" if row.get("eligible") else "Eligibility review needed"
+        marker_color = "green" if row.get("open_selected_time") and row.get("eligible") else "orange"
         popup_html = f"""
+        <div style='width:260px'>
         <b>{row.get('name')}</b><br>
         {row.get('center_type')}<br>
         {row.get('city')}, {row.get('region')}<br>
-        Hours: {row.get('hours_today')}<br>
-        Status: {status}<br>
-        Eligibility: {eligible}<br>
-        AI match: {row.get('ai_match_score', 'N/A')}<br>
+        Hours: {row.get('hours_selected_day')}<br>
+        Status: {open_text}<br>
+        Eligibility: {eligibility_text}<br>
+        AI match: {row.get('ai_match_score', 'N/A')}%<br>
+        <small>{row.get('verification_status')}</small>
+        </div>
         """
         folium.Marker(
             location=[row["latitude"], row["longitude"]],
-            popup=folium.Popup(popup_html, max_width=320),
+            popup=folium.Popup(popup_html, max_width=340),
             tooltip=row.get("name"),
-            icon=folium.Icon(color=color, icon="info-sign"),
+            icon=folium.Icon(color=marker_color, icon="info-sign"),
         ).add_to(fmap)
     return fmap
 
@@ -387,27 +549,48 @@ def build_map(df: pd.DataFrame, user_lat: float | None, user_lon: float | None) 
 def render_events(row: pd.Series) -> None:
     events = safe_json_loads(row.get("events_json"), [])
     if not events:
-        st.write("No upcoming events listed.")
+        st.write("No events listed.")
         return
-    event_df = pd.DataFrame(events)
-    st.dataframe(event_df, use_container_width=True, hide_index=True)
+    st.dataframe(pd.DataFrame(events), use_container_width=True, hide_index=True)
+
+
+def render_contact(row: pd.Series) -> None:
+    contact_items = []
+    if row.get("phone"):
+        contact_items.append(f"Phone: {row.get('phone')}")
+    if row.get("telegram"):
+        contact_items.append(f"Telegram: {row.get('telegram')}")
+    if contact_items:
+        st.write(" | ".join(contact_items))
+    website = str(row.get("website", "")).strip()
+    if website.startswith("http"):
+        st.link_button("Open website", website)
 
 
 def render_center_card(row: pd.Series) -> None:
-    header = f"{row.get('name')} - {row.get('ai_match_score', 'N/A')}% AI match"
-    with st.expander(header, expanded=False):
+    label = f"{row.get('name')} · {row.get('ai_match_score', 'N/A')}% match"
+    with st.expander(label, expanded=False):
         left, right = st.columns([1.35, 1])
         with left:
             st.markdown(f"**Type:** {row.get('center_type')}")
-            st.markdown(f"**Location:** {row.get('address')}")
-            st.markdown(f"**Open hours on selected day:** {row.get('hours_today')}")
-            st.markdown(f"**Status:** {'Open at selected time' if row.get('open_selected_time') else 'Closed at selected time'}")
-            st.markdown(f"**Eligibility:** {'Eligible' if row.get('eligible') else 'Needs review'}")
-            st.markdown(f"**Eligibility notes:** {row.get('eligibility_notes')}")
-            st.markdown(f"**AI reason:** {row.get('ai_reason')}")
+            st.markdown(
+                f"**Location:** {row.get('address')}, {row.get('district')}, {row.get('city')}, {row.get('region')}"
+            )
+            st.markdown(f"**Hours on selected day:** {row.get('hours_selected_day')}")
+            st.markdown(
+                f"**Selected-time status:** {'Open' if row.get('open_selected_time') else 'Closed'}"
+            )
+            st.markdown(f"**Eligibility:** {'Eligible' if row.get('eligible') else 'Review needed'}")
+            st.markdown(f"**Eligibility result:** {row.get('eligibility_reasons')}")
+            st.markdown(f"**AI explanation:** {row.get('ai_reason')}")
             if pd.notna(row.get("commute_minutes", np.nan)):
-                st.markdown(f"**Estimated commute:** {row.get('commute_minutes')} minutes ({row.get('distance_km'):.1f} km)")
+                st.markdown(
+                    f"**Estimated commute:** {row.get('commute_minutes')} minutes · {row.get('distance_km'):.1f} km"
+                )
+            st.markdown(f"**Cost:** {row.get('cost_level')} · {row.get('monthly_fee_uzs', 'Contact center')} UZS/month")
             st.markdown(f"**Description:** {row.get('description')}")
+            st.warning(str(row.get("verification_status")))
+            render_contact(row)
         with right:
             st.markdown("**Subjects**")
             st.write(", ".join(split_pipe(row.get("subjects", ""))))
@@ -416,67 +599,116 @@ def render_center_card(row: pd.Series) -> None:
             st.markdown("**Utilities**")
             st.write(", ".join(split_pipe(row.get("utilities", ""))))
             st.markdown("**Languages**")
-            st.write(row.get("languages", ""))
-        st.markdown("**Events**")
+            st.write(", ".join(split_pipe(row.get("languages", ""))))
+            st.markdown("**Affiliations / partners**")
+            st.write(", ".join(split_pipe(row.get("affiliations", ""))) or "Not listed")
+        st.markdown("**Programs and events**")
         render_events(row)
-        st.link_button("Open example website", row.get("website", "https://example.org"))
+
+
+def regional_summary(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return pd.DataFrame(columns=["region", "centers", "open_at_selected_time", "eligible", "average_ai_match"])
+    summary = (
+        df.groupby("region", as_index=False)
+        .agg(
+            centers=("center_id", "count"),
+            open_at_selected_time=("open_selected_time", "sum"),
+            eligible=("eligible", "sum"),
+            average_ai_match=("ai_match_score", "mean"),
+        )
+        .sort_values("centers", ascending=False)
+    )
+    summary["average_ai_match"] = summary["average_ai_match"].round(1)
+    return summary
 
 
 def main() -> None:
     st.set_page_config(
-        page_title="AI Education Center Finder",
-        page_icon="school",
+        page_title="Uzbekistan Education Center Finder",
+        page_icon="🎓",
         layout="wide",
+        initial_sidebar_state="expanded",
     )
-    st.title("AI-Based Education Center Cross-Function Website App")
-    st.caption(
-        "A portfolio-ready Streamlit app where students, parents, and teachers can find, filter, map, and compare education centers."
+
+    st.markdown(
+        """
+        <style>
+        .block-container {padding-top: 1.6rem; padding-bottom: 3rem;}
+        [data-testid="stMetricValue"] {font-size: 1.65rem;}
+        .uz-card {padding: 0.8rem 1rem; border: 1px solid rgba(128,128,128,.25); border-radius: 0.8rem;}
+        </style>
+        """,
+        unsafe_allow_html=True,
     )
+
+    with st.sidebar:
+        ui_language = st.selectbox("Interface language", list(TRANSLATIONS), index=0)
+    text = TRANSLATIONS[ui_language]
+
+    st.title(text["title"])
+    st.caption(text["subtitle"])
+    st.warning(text["demo"])
 
     df = load_centers()
     if df.empty:
         st.stop()
 
+    now_tashkent = dt.datetime.now(UZBEKISTAN_TIMEZONE)
+
     with st.sidebar:
-        st.header("1. User profile")
-        role = st.selectbox("I am using this as a", ["Student", "Parent", "Teacher"])
-        grade = st.slider("Student grade", 0, 12, 9)
-        age = st.number_input("Student age", min_value=4, max_value=25, value=15, step=1)
-        has_membership = st.checkbox("Student/family has center membership or referral", value=False)
+        st.header(text["profile"])
+        role = st.selectbox("User role", ["Student / O‘quvchi", "Parent / Ota-ona", "Teacher / O‘qituvchi"])
+        grade = st.slider("Student grade (Uzbekistan system)", 1, 11, 8)
+        age = st.number_input("Student age", min_value=6, max_value=25, value=14, step=1)
+        has_membership = st.checkbox("Has membership or referral", value=False)
         goal_text = st.text_area(
-            "Personal goal or need",
-            value="I want a center with coding, tutoring, college readiness, and a safe study space.",
+            "Learning goal (English, Uzbek, or Russian)",
+            value="Matematika, ingliz tili va IT bo‘yicha darslar kerak.",
             height=90,
         )
 
-        st.header("2. Date and availability")
-        selected_date = st.date_input("Choose a date", value=dt.date.today())
-        selected_time = st.time_input("Choose a time", value=dt.datetime.now().time().replace(second=0, microsecond=0))
-        open_only = st.checkbox("Only show centers open at selected time", value=False)
-        eligible_only = st.checkbox("Only show eligible centers", value=False)
+        st.header(text["availability"])
+        selected_date = st.date_input("Choose date", value=now_tashkent.date())
+        selected_time = st.time_input(
+            "Choose local time (Asia/Tashkent)",
+            value=now_tashkent.time().replace(second=0, microsecond=0),
+        )
+        open_only = st.checkbox("Only open at selected time", value=False)
+        eligible_only = st.checkbox("Only eligible for profile", value=False)
 
-        st.header("3. Location and commute")
-        location_mode = st.radio("Location input", ["Use demo location", "Enter manually", "No commute filter"])
-        if location_mode == "Use demo location":
-            user_lat, user_lon = 39.2037, -76.8610
-            st.caption("Demo location: Columbia, Maryland")
-        elif location_mode == "Enter manually":
-            user_lat = st.number_input("Your latitude", value=39.2037, format="%.6f")
-            user_lon = st.number_input("Your longitude", value=-76.8610, format="%.6f")
+        st.header(text["location"])
+        location_mode = st.radio(
+            "Location input",
+            ["Choose Uzbekistan city", "Enter coordinates", "No commute filter"],
+        )
+        if location_mode == "Choose Uzbekistan city":
+            preset_name = st.selectbox("Your city", list(LOCATION_PRESETS), index=0)
+            user_lat, user_lon = LOCATION_PRESETS[preset_name]
+            st.caption(f"Map origin: {preset_name}")
+        elif location_mode == "Enter coordinates":
+            user_lat = st.number_input("Latitude", min_value=37.0, max_value=46.0, value=41.3111, format="%.6f")
+            user_lon = st.number_input("Longitude", min_value=55.5, max_value=74.5, value=69.2797, format="%.6f")
         else:
             user_lat, user_lon = None, None
-        commute_mode = st.selectbox("Commute mode", list(SPEED_KMPH.keys()), index=2)
-        max_commute = st.slider("Maximum estimated commute time", 5, 180, 60, step=5)
 
-        st.header("4. Filters")
-        countries = ["All"] + sorted(df["country"].dropna().unique().tolist())
-        country = st.selectbox("Country", countries, index=1 if len(countries) > 1 else 0)
-        regions = st.multiselect("Region/state", sorted(df["region"].dropna().unique().tolist()))
-        cities = st.multiselect("City", sorted(df["city"].dropna().unique().tolist()))
-        center_types = st.multiselect("Center type", sorted(df["center_type"].dropna().unique().tolist()))
-        selected_subjects = st.multiselect("Subject interests", unique_terms(df, "subjects"), default=[])
-        selected_resources = st.multiselect("Resource needs", unique_terms(df, "resources"), default=[])
-        keyword = st.text_input("Keyword search", placeholder="Example: robotics, essay, ESL, printing")
+        commute_mode = st.selectbox("Commute mode", list(SPEED_KMPH), index=2)
+        max_commute = st.slider("Maximum estimated commute", 5, 300, 75, step=5)
+        st.caption("Commute time is an estimate, not live routing.")
+
+        st.header(text["filters"])
+        regions = st.multiselect("Region", UZBEKISTAN_REGIONS)
+        available_cities = sorted(
+            df[df["region"].isin(regions)]["city"].unique().tolist()
+            if regions
+            else df["city"].unique().tolist()
+        )
+        cities = st.multiselect("City", available_cities)
+        center_types = st.multiselect("Center type", sorted(df["center_type"].unique().tolist()))
+        preferred_languages = st.multiselect("Preferred teaching language", unique_terms(df, "languages"))
+        selected_subjects = st.multiselect("Subject interests", unique_terms(df, "subjects"))
+        selected_resources = st.multiselect("Resource needs", unique_terms(df, "resources"))
+        keyword = st.text_input("Keyword", placeholder="robotics, IELTS, matematika, русский...")
 
     enriched = add_computed_columns(
         df,
@@ -491,10 +723,10 @@ def main() -> None:
     )
     filtered = filter_centers(
         enriched,
-        country,
         regions,
         cities,
         center_types,
+        preferred_languages,
         open_only,
         eligible_only,
         max_commute,
@@ -507,95 +739,105 @@ def main() -> None:
         selected_resources,
         center_types,
         goal_text,
+        preferred_languages,
     )
 
-    metric_cols = st.columns(4)
+    metric_cols = st.columns(5)
     metric_cols[0].metric("Matching centers", len(ranked))
-    metric_cols[1].metric("Open now", int(ranked["open_selected_time"].sum()) if not ranked.empty else 0)
-    metric_cols[2].metric("Eligible", int(ranked["eligible"].sum()) if not ranked.empty else 0)
-    if not ranked.empty and ranked["commute_minutes"].notna().any():
-        metric_cols[3].metric("Median commute", f"{ranked['commute_minutes'].median():.0f} min")
-    else:
-        metric_cols[3].metric("Median commute", "N/A")
+    metric_cols[1].metric("Regions represented", ranked["region"].nunique() if not ranked.empty else 0)
+    metric_cols[2].metric("Open", int(ranked["open_selected_time"].sum()) if not ranked.empty else 0)
+    metric_cols[3].metric("Eligible", int(ranked["eligible"].sum()) if not ranked.empty else 0)
+    median_commute = ranked["commute_minutes"].median() if not ranked.empty else np.nan
+    metric_cols[4].metric("Median commute", f"{median_commute:.0f} min" if pd.notna(median_commute) else "N/A")
 
-    tab_recs, tab_map, tab_compare, tab_data, tab_method = st.tabs(
-        ["Recommendations", "Regional map", "Compare centers", "Data editor", "How it works"]
+    tab_recs, tab_map, tab_compare, tab_analytics, tab_data = st.tabs(
+        [text["recommendations"], text["map"], text["compare"], text["analytics"], text["data"]]
     )
 
     with tab_recs:
-        st.subheader("Personalized recommendations")
+        st.subheader("Personalized Uzbekistan recommendations")
         if ranked.empty:
-            st.warning("No centers match the current filters. Try expanding commute time, removing center type filters, or turning off open/eligible only.")
+            st.warning("No centers match the current filters. Remove one or more filters or increase the commute limit.")
         else:
-            for _, row in ranked.head(12).iterrows():
+            for _, row in ranked.head(14).iterrows():
                 render_center_card(row)
 
     with tab_map:
-        st.subheader("Regional education-center map")
+        st.subheader("Education-center map of Uzbekistan")
         fmap = build_map(ranked, user_lat, user_lon)
-        st_folium(fmap, width=None, height=620)
-        st.caption("Green markers are open and eligible for the selected profile. Orange markers need schedule or eligibility review.")
+        st_folium(fmap, width=None, height=640, key="uzbekistan_center_map")
+        st.caption("Green: open and eligible. Orange: schedule or eligibility review needed. Blue: selected user location.")
 
     with tab_compare:
         st.subheader("Comparison table")
         if ranked.empty:
             st.info("No results to compare.")
         else:
-            cols = [
+            columns = [
                 "name",
-                "city",
                 "region",
+                "city",
+                "district",
                 "center_type",
                 "ai_match_score",
                 "open_selected_time",
-                "hours_today",
+                "hours_selected_day",
                 "eligible",
-                "eligibility_reasons",
                 "commute_minutes",
                 "cost_level",
+                "monthly_fee_uzs",
                 "subjects",
                 "resources",
-                "utilities",
                 "languages",
-                "website",
+                "verification_status",
             ]
-            display_cols = [c for c in cols if c in ranked.columns]
-            st.dataframe(ranked[display_cols], use_container_width=True, hide_index=True)
+            display_columns = [column for column in columns if column in ranked.columns]
+            st.dataframe(ranked[display_columns], use_container_width=True, hide_index=True)
             st.download_button(
-                "Download filtered results as CSV",
-                data=ranked[display_cols].to_csv(index=False).encode("utf-8"),
-                file_name="filtered_education_centers.csv",
+                "Download filtered Uzbekistan results",
+                data=ranked[display_columns].to_csv(index=False).encode("utf-8-sig"),
+                file_name="uzbekistan_education_center_results.csv",
                 mime="text/csv",
             )
 
-    with tab_data:
-        st.subheader("Dataset customization")
-        st.markdown(
-            "Edit the sample dataset in `education_centers_seed.csv` or replace it with open/public data for your chosen country. "
-            "The app will automatically read the CSV when it starts."
-        )
-        edited = st.data_editor(df, use_container_width=True, num_rows="dynamic")
-        st.download_button(
-            "Download edited dataset",
-            data=edited.to_csv(index=False).encode("utf-8"),
-            file_name="education_centers_seed_edited.csv",
-            mime="text/csv",
-        )
+    with tab_analytics:
+        st.subheader("Regional coverage and match analytics")
+        summary = regional_summary(ranked)
+        if summary.empty:
+            st.info("No data is available for the current filters.")
+        else:
+            st.dataframe(summary, use_container_width=True, hide_index=True)
+            st.markdown("**Centers by region**")
+            st.bar_chart(summary.set_index("region")[["centers"]])
+            st.markdown("**Center types in current results**")
+            type_counts = ranked["center_type"].value_counts().rename_axis("center_type").to_frame("centers")
+            st.bar_chart(type_counts)
 
-    with tab_method:
-        st.subheader("AI recommendation method")
+    with tab_data:
+        st.subheader("Dataset and responsible deployment")
         st.markdown(
-            "The recommendation engine uses a transparent content-based approach: "
-            "TF-IDF text similarity compares the user's goals, selected subjects, resources, and center type preferences against each center's profile. "
-            "The final score also rewards eligibility, open status, lower commute time, and lower cost."
+            "This repository is restricted to Uzbekistan: the app filters the CSV to `country == Uzbekistan`, "
+            "the country selector was removed, the map is bounded to Uzbekistan, the grade range is 1–11, "
+            "and the location presets contain Uzbekistan cities only."
         )
+        st.markdown(
+            "The included records are synthetic portfolio data. Before a public launch, replace them with verified, "
+            "permissioned data and establish a process for checking hours, fees, eligibility, phone numbers, addresses, "
+            "accessibility details, and event dates."
+        )
+        st.markdown("**Transparent recommendation formula**")
         st.code(
-            "score = 0.42*content + 0.18*eligibility + 0.16*open + 0.14*distance + 0.10*cost",
+            "score = 0.43*content + 0.19*eligibility + 0.15*open + 0.13*distance + 0.10*cost",
             language="python",
         )
         st.markdown(
-            "For a more advanced version, replace the TF-IDF step with embeddings, add real transit APIs, connect to a public school/open-data portal, "
-            "or add secure user accounts and saved preferences. Do not upload private student data unless the app has proper consent, security, and compliance controls."
+            "The content score uses local TF-IDF character n-grams. No OpenAI key, paid API, or external AI service is required."
+        )
+        st.download_button(
+            "Download bundled demonstration dataset",
+            data=df.drop(columns=["membership_required_bool"], errors="ignore").to_csv(index=False).encode("utf-8-sig"),
+            file_name="uzbekistan_education_centers.csv",
+            mime="text/csv",
         )
 
 
