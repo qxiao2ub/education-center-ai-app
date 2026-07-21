@@ -2,6 +2,9 @@
 
 A GitHub- and Streamlit-ready portfolio project for students, parents, and teachers to discover, filter, map, compare, and rank education centers **inside Uzbekistan only**.
 
+**Author:** Mukhammadjon Khojikulov  
+**Mentor:** Dr. Qingyang Xiao
+
 ## Important data notice
 
 The bundled center records are **synthetic demonstration data**. The project intentionally labels every sample record as `[Demo]`. Before a public launch, replace the CSV with verified and permissioned information from education centers or suitable public/open-data sources.
@@ -32,19 +35,93 @@ The bundled center records are **synthetic demonstration data**. The project int
 - Regional coverage analytics
 - No OpenAI key or paid API required
 
-## Explainable AI method
+## Explainable AI and calculation declaration
 
-The app uses a local content-based recommendation method:
+The app applies deterministic filters first, then calculates a local, auditable recommendation score:
 
 ```text
-score = 0.43 × content similarity
-      + 0.19 × eligibility
-      + 0.15 × open status
-      + 0.13 × distance
-      + 0.10 × affordability
+score_percent = 100 × (
+    0.43 × content_score
+  + 0.19 × eligibility_score
+  + 0.15 × open_score
+  + 0.13 × distance_score
+  + 0.10 × affordability_score
+)
 ```
 
-Content similarity is calculated with TF-IDF character n-grams. Character n-grams allow basic matching across multilingual input without sending user text to an external AI service.
+### Content score
+
+The app combines each center's name, type, Uzbekistan location, subjects, resources, utilities, affiliations, languages, description, eligibility notes, search keywords, and event information. The user query combines role, learning goal, subjects, resources, preferred center types, and teaching languages.
+
+It then uses:
+
+```python
+TfidfVectorizer(
+    analyzer="char_wb",
+    ngram_range=(3, 5),
+    min_df=1,
+    sublinear_tf=True,
+)
+```
+
+Cosine similarity compares each center with the user query. Similarities are normalized by the highest similarity in the current filtered result set. This makes the content component a relative score from 0 to 1. No user text is sent to an external AI service.
+
+### Eligibility and schedule scores
+
+- `eligibility_score = 1` only when grade, age, and any membership/referral requirement pass; otherwise 0.
+- `open_score = 1` when at least one schedule interval for the selected weekday contains the selected local time; otherwise 0.
+- Start and end times are inclusive, and overnight schedule intervals are supported.
+
+### Distance and commute calculations
+
+Straight-line distance is calculated with the Haversine equation using an Earth radius of 6,371 km:
+
+```text
+a = sin²(Δlatitude/2) + cos(latitude_1) × cos(latitude_2) × sin²(Δlongitude/2)
+distance_km = 2 × 6371 × atan2(sqrt(a), sqrt(1-a))
+```
+
+The ranking distance component is:
+
+```text
+distance_score = 1 / (1 + distance_km / 10)
+```
+
+When the user does not provide a location, the app uses a neutral distance score of `0.65`.
+
+Commute time is a transparent approximation, not live routing:
+
+```text
+commute_minutes = round((distance_km / assumed_speed_kmph) × 60 + fixed_buffer_minutes, 1)
+```
+
+| Mode | Assumed speed | Fixed buffer |
+| --- | ---: | ---: |
+| Walking | 5 km/h | 2 min |
+| Bicycle | 15 km/h | 4 min |
+| Public transport | 24 km/h | 14 min |
+| Car / taxi | 42 km/h | 8 min |
+
+### Affordability score
+
+| Cost level | Score |
+| --- | ---: |
+| Free | 1.00 |
+| Free / subsidized | 0.92 |
+| Low-cost | 0.82 |
+| Moderate | 0.62 |
+| Premium | 0.38 |
+| Unrecognized value | 0.58 |
+
+Final results are sorted by AI match score, then open status, then eligibility. The score supports discovery and comparison; it does not measure teaching quality or guarantee admission, availability, or travel time.
+
+### Dashboard metric definitions
+
+- **Matching centers:** records left after all active filters.
+- **Regions represented:** distinct Uzbekistan regions in the matching records.
+- **Open:** matching centers open at the selected date and time.
+- **Eligible:** matching centers passing grade, age, and membership/referral rules.
+- **Median commute:** median estimated commute time among matching centers, or N/A without a location.
 
 ## Repository structure
 
@@ -202,6 +279,10 @@ For a real launch, consider adding:
 - Uzbek Latin, Uzbek Cyrillic, Karakalpak, Russian, and English localization
 - privacy controls and parental consent for student accounts
 
+## Authorship declaration
+
+This application was authored by **Mukhammadjon Khojikulov** under the mentorship of **Dr. Qingyang Xiao**. The recommendation factors and assumptions are disclosed in the app and this README so the results can be reviewed and audited.
+
 ## Responsible AI and privacy
 
 - Do not collect unnecessary student personal information.
@@ -219,9 +300,3 @@ For a real launch, consider adding:
 ## License
 
 MIT License. The synthetic dataset is included only for demonstration and testing.
-
-## Acknowledgement
-
-Author: Mukhammadjon Khojikulov
-
-Mentor: Dr. Qingyang Xiao

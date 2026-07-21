@@ -33,6 +33,10 @@ import app  # noqa: E402
 
 
 def main() -> None:
+    assert app.APP_NAME == "AI Education Center Finder — Uzbekistan"
+    assert app.AUTHOR_NAME == "Mukhammadjon Khojikulov"
+    assert app.MENTOR_NAME == "Dr. Qingyang Xiao"
+
     centers = app.load_centers()
     assert len(centers) == 28
     assert set(centers["country"].unique()) == {"Uzbekistan"}

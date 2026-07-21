@@ -18,6 +18,9 @@ from streamlit_folium import st_folium
 APP_DIR = Path(__file__).resolve().parent
 DATA_PATH = APP_DIR / "uzbekistan_education_centers.csv"
 UZBEKISTAN_TIMEZONE = ZoneInfo("Asia/Tashkent")
+APP_NAME = "AI Education Center Finder — Uzbekistan"
+AUTHOR_NAME = "Mukhammadjon Khojikulov"
+MENTOR_NAME = "Dr. Qingyang Xiao"
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 UZBEKISTAN_REGIONS = [
@@ -625,7 +628,7 @@ def regional_summary(df: pd.DataFrame) -> pd.DataFrame:
 
 def main() -> None:
     st.set_page_config(
-        page_title="Uzbekistan Education Center Finder",
+        page_title=APP_NAME,
         page_icon="🎓",
         layout="wide",
         initial_sidebar_state="expanded",
@@ -637,12 +640,59 @@ def main() -> None:
         .block-container {padding-top: 1.6rem; padding-bottom: 3rem;}
         [data-testid="stMetricValue"] {font-size: 1.65rem;}
         .uz-card {padding: 0.8rem 1rem; border: 1px solid rgba(128,128,128,.25); border-radius: 0.8rem;}
+        .sidebar-project-card {
+            padding: 1rem 1rem 0.9rem 1rem;
+            margin: 0 0 1rem 0;
+            border: 1px solid rgba(0, 153, 181, 0.28);
+            border-radius: 0.9rem;
+            background: linear-gradient(145deg, rgba(0,153,181,.10), rgba(255,255,255,.70));
+        }
+        .sidebar-app-label {
+            font-size: 0.68rem;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: #007f98;
+            margin-bottom: 0.3rem;
+        }
+        .sidebar-app-name {
+            font-size: 1.02rem;
+            line-height: 1.28;
+            font-weight: 800;
+            color: #172B3A;
+            margin-bottom: 0.8rem;
+        }
+        .sidebar-credit {
+            font-size: 0.83rem;
+            line-height: 1.45;
+            color: #344b59;
+            margin-top: 0.32rem;
+        }
+        .project-declaration {
+            padding: 1rem 1.1rem;
+            border-left: 5px solid #0099B5;
+            border-radius: 0.55rem;
+            background: rgba(0,153,181,.07);
+            margin: 0.35rem 0 1.1rem 0;
+            line-height: 1.65;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
 
     with st.sidebar:
+        st.markdown(
+            f"""
+            <div class="sidebar-project-card">
+                <div class="sidebar-app-label">Application</div>
+                <div class="sidebar-app-name">{APP_NAME}</div>
+                <div class="sidebar-credit"><strong>Author</strong><br>{AUTHOR_NAME}</div>
+                <div class="sidebar-credit"><strong>Mentor</strong><br>{MENTOR_NAME}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         ui_language = st.selectbox("Interface language", list(TRANSLATIONS), index=0)
     text = TRANSLATIONS[ui_language]
 
@@ -814,24 +864,124 @@ def main() -> None:
             st.bar_chart(type_counts)
 
     with tab_data:
-        st.subheader("Dataset and responsible deployment")
+        st.subheader("Dataset, algorithms, authorship, and responsible deployment")
+        st.markdown(
+            f"""
+            <div class="project-declaration">
+                <strong>Application:</strong> {APP_NAME}<br>
+                <strong>Author:</strong> {AUTHOR_NAME}<br>
+                <strong>Mentor:</strong> {MENTOR_NAME}<br>
+                <strong>Scope:</strong> Uzbekistan-only education-center discovery, filtering, mapping, comparison, and explainable recommendation support.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown("### Calculation and algorithm declaration")
+        st.markdown(
+            "The app applies deterministic filters first and then calculates an explainable recommendation score. "
+            "The result is decision support only; it is not a guarantee of center quality, admission, availability, or travel time."
+        )
+
+        with st.expander("1. How the AI recommendation score is calculated", expanded=True):
+            st.markdown(
+                "**Step A — Build the text compared by the model.** For each center, the app joins its name, center type, "
+                "region, city, district, subjects, resources, utilities, affiliations, languages, description, eligibility notes, "
+                "search keywords, and event titles/audiences. The user query joins the selected role, learning goal, subjects, "
+                "resources, center types, and preferred languages."
+            )
+            st.markdown(
+                "**Step B — Local multilingual text matching.** The app uses `TfidfVectorizer` with "
+                "`analyzer='char_wb'`, character n-grams from 3 to 5 characters, `min_df=1`, and `sublinear_tf=True`. "
+                "Cosine similarity compares every center vector with the user-query vector. The similarities are divided by "
+                "the highest similarity in the current filtered result set, producing a relative content score from 0 to 1. "
+                "If every similarity is zero, every content score is set to zero."
+            )
+            st.code(
+                """score_percent = 100 * (
+    0.43 * content_score
+  + 0.19 * eligibility_score
+  + 0.15 * open_score
+  + 0.13 * distance_score
+  + 0.10 * affordability_score
+)""",
+                language="python",
+            )
+            st.markdown(
+                """- **Content score:** normalized TF-IDF cosine similarity, from 0 to 1.
+- **Eligibility score:** 1 only when grade, age, and any membership/referral requirement pass; otherwise 0.
+- **Open score:** 1 when at least one schedule interval contains the selected local date/time; otherwise 0.
+- **Distance score:** `1 / (1 + distance_km / 10)`. When no user location is supplied, the neutral value 0.65 is used.
+- **Affordability score:** Free=1.00, Free/subsidized=0.92, Low-cost=0.82, Moderate=0.62, Premium=0.38; unrecognized values=0.58.
+- **Final ordering:** descending AI score, then open status, then eligibility."""
+            )
+
+        with st.expander("2. Eligibility and opening-hours calculations"):
+            st.markdown(
+                "A center is marked **eligible** only when the selected grade is between `min_grade` and `max_grade`, "
+                "the selected age is between `min_age` and `max_age`, and a required membership/referral is present. "
+                "Each comparison includes both endpoints."
+            )
+            st.markdown(
+                "Opening hours are read from `open_schedule_json`. The selected date is converted to its English weekday name, "
+                "and the app checks whether the selected time falls inside any interval for that weekday. Start and end times "
+                "are inclusive. An interval whose end time is earlier than its start time is treated as an overnight interval."
+            )
+
+        with st.expander("3. Distance and commute-time calculations"):
+            st.markdown(
+                "Straight-line geographic distance is calculated with the Haversine equation using an Earth radius of 6,371 km."
+            )
+            st.code(
+                """a = sin²(Δlatitude/2) + cos(latitude_1) * cos(latitude_2) * sin²(Δlongitude/2)
+distance_km = 2 * 6371 * atan2(sqrt(a), sqrt(1-a))""",
+                language="text",
+            )
+            st.markdown(
+                "The commute estimate is not live road routing. It is calculated as "
+                "`round((distance_km / assumed_speed_kmph) * 60 + mode_buffer_minutes, 1)`."
+            )
+            commute_assumptions = pd.DataFrame(
+                [
+                    {"Mode": "Walking", "Assumed speed (km/h)": 5, "Fixed buffer (minutes)": 2},
+                    {"Mode": "Bicycle", "Assumed speed (km/h)": 15, "Fixed buffer (minutes)": 4},
+                    {"Mode": "Public transport", "Assumed speed (km/h)": 24, "Fixed buffer (minutes)": 14},
+                    {"Mode": "Car / taxi", "Assumed speed (km/h)": 42, "Fixed buffer (minutes)": 8},
+                ]
+            )
+            st.dataframe(commute_assumptions, use_container_width=True, hide_index=True)
+
+        with st.expander("4. Dashboard metric definitions"):
+            st.markdown(
+                """- **Matching centers:** number of records remaining after the selected region, city, center-type, language, open-only, eligible-only, commute, and keyword filters.
+- **Regions represented:** number of distinct Uzbekistan region values among matching centers.
+- **Open:** count of matching centers open at the selected local date and time.
+- **Eligible:** count of matching centers passing the grade, age, and membership/referral rules.
+- **Median commute:** median of the estimated commute minutes among matching centers; shown as N/A when no location is used."""
+            )
+
+        st.markdown("### Uzbekistan-only data declaration")
         st.markdown(
             "This repository is restricted to Uzbekistan: the app filters the CSV to `country == Uzbekistan`, "
-            "the country selector was removed, the map is bounded to Uzbekistan, the grade range is 1–11, "
-            "and the location presets contain Uzbekistan cities only."
+            "the country selector is removed, the map is bounded to Uzbekistan, the grade range is 1–11, "
+            "the timezone is `Asia/Tashkent`, and the location presets contain Uzbekistan cities only."
+        )
+        st.warning(
+            "The bundled center records are synthetic portfolio data. Before a public launch, replace them with verified, "
+            "permissioned records and establish a recurring process for checking hours, fees, eligibility, phone numbers, "
+            "addresses, accessibility information, and event dates."
+        )
+
+        st.markdown("### Authorship and responsible-use declaration")
+        st.markdown(
+            f"This application was authored by **{AUTHOR_NAME}** under the mentorship of **{MENTOR_NAME}**. "
+            "The recommendation factors and assumptions are disclosed above to make the ranking auditable. "
+            "No OpenAI key, paid API, or external AI service is required. User-entered profile information is processed "
+            "during the current Streamlit session and should not be treated as a secure student-record system."
         )
         st.markdown(
-            "The included records are synthetic portfolio data. Before a public launch, replace them with verified, "
-            "permissioned data and establish a process for checking hours, fees, eligibility, phone numbers, addresses, "
-            "accessibility details, and event dates."
-        )
-        st.markdown("**Transparent recommendation formula**")
-        st.code(
-            "score = 0.43*content + 0.19*eligibility + 0.15*open + 0.13*distance + 0.10*cost",
-            language="python",
-        )
-        st.markdown(
-            "The content score uses local TF-IDF character n-grams. No OpenAI key, paid API, or external AI service is required."
+            "For production use, add verified data governance, privacy and parental-consent controls, accessibility review, "
+            "center correction mechanisms, audit logs, secure authentication, and real routing before relying on the app for decisions."
         )
         st.download_button(
             "Download bundled demonstration dataset",
@@ -839,6 +989,7 @@ def main() -> None:
             file_name="uzbekistan_education_centers.csv",
             mime="text/csv",
         )
+
 
 
 if __name__ == "__main__":
